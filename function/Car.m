@@ -492,7 +492,8 @@ classdef Car < handle
 
             for k = 1:length(t)-1 % Loop until the second-to-last element
                 x(:,k+1) = Ad(:,:,k) * x(:,k) + Bd(:, :, k) * u(k+1) + chol(SigmaW(:, :, k), 'lower') * randn(3, 1); % Use u(k+1) correctly
-                z(:,k) = Cd * x(:,k) + Dd * u(k) + chol(SigmaV, 'lower') * randn(3, 1); % Still use u(k) for the current state
+                % z(:,k) = Cd * x(:,k) + Dd * u(k) + chol(SigmaV, 'lower') * randn(3, 1); % Still use u(k) for the current state
+                z(:,k) = Cd * x(:,k) + Dd * u(k)
             end
 
             % After the loop, handle the last state update and output calculation
@@ -587,7 +588,11 @@ classdef Car < handle
                 % KF Step 2a: Compute estimator matrix
                 L = SigmaX * Cd' /( Cd* SigmaX *Cd'+ SigmaV);
                 % KF Step 2b: State estimate measurement update
-                xhat = xhat + L*(z(:,k) - zhat);
+                % xhat = xhat + L*(z(:,k) - zhat);
+                z_meas = [obj.str_v2v_data_short.(vehicleID).X'; ...
+                          obj.str_v2v_data_short.(vehicleID).Y'; ...   % ← add this line back
+                          obj.str_v2v_data_short.(vehicleID).V'];
+                xhat = xhat + L * (z_meas(:,k) - zhat);
                 % KF Step 2c: Estimation - error covariance measurement update
                 SigmaX = (eye(nx)-L*Cd)* SigmaX;
                 % [ Store estimate and bounds for evaluation / plotting purposes ]
@@ -637,9 +642,9 @@ classdef Car < handle
             wx = 1/3; wy = 1/3; wv = 1/3;    % Weights for X, Y, and V
 
             % extract data
-            X = dataV2V.X;
-            Y = dataV2V.Y;
-            V = dataV2V.V;
+            X = dataV2V.X';
+            Y = dataV2V.Y';
+            V = dataV2V.V';
             zhat = dataKF.zhatstore;
 
             % Compute error
@@ -648,20 +653,20 @@ classdef Car < handle
             error_v = abs(V - zhat(3, :));
 
             % Calculate dynamic error sensitivity based on the range or standard deviation
-            sensitivity_x = max(range(error_x), std(error_x) * 3);  % Adapt to the data spread
-            sensitivity_y = max(range(error_y), std(error_y) * 3);
-            sensitivity_v = max(range(error_v), std(error_v) * 3);
+            buffer = 1e-5;
+            sensitivity_x = 3 * sqrt(obj.variance_X);
+            sensitivity_y = 3 * sqrt(obj.variance_Y);
+            sensitivity_v = 3 * sqrt(obj.variance_V);
 
             % Avoid division by zero by adding a small buffer
-            buffer = 1e-5;
             normalized_error_x = error_x / (sensitivity_x + buffer);
             normalized_error_y = error_y / (sensitivity_y + buffer);
             normalized_error_v = error_v / (sensitivity_v + buffer);
 
-            % Use Sigmoid credibility function
-            cred_x = 1 ./ (1 + exp(-normalized_error_x));
-            cred_y = 1 ./ (1 + exp(-normalized_error_y));
-            cred_v = 1 ./ (1 + exp(-normalized_error_v));
+            % Use exponential decay: error=0→1.0, error=∞→0.0
+            cred_x = exp(-normalized_error_x);
+            cred_y = exp(-normalized_error_y);
+            cred_v = exp(-normalized_error_v);
 
 
             % Weighted credibility score
