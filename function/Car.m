@@ -410,83 +410,110 @@ classdef Car < handle
                 Acc = sgolayfilt(Acc_noisy, polynomial_order, window_length);
             end
 
-            % heading angle
-            dx = diff(X);
-            dy = diff(Y);
-            % Check if there is enough data to calculate theta
-            if isempty(dx) || isempty(dy)
-                % disp('Insufficient data to calculate theta.');
-                theta = zeros(size(X));  % Default fallback if no data for theta
-            else
-                theta = atan2(dy, dx);
-                theta = [theta; theta(end)];  % Extend theta to match the size of X or Y
-                % disp(['Calculated theta: ', num2str(theta')]);
-                theta = unwrap(theta);  % Ensure no sudden jumps
-            end
+            % % heading angle
+            % dx = diff(X);
+            % dy = diff(Y);
+            % % Check if there is enough data to calculate theta
+            % if isempty(dx) || isempty(dy)
+            %     % disp('Insufficient data to calculate theta.');
+            %     theta = zeros(size(X));  % Default fallback if no data for theta
+            % else
+            %     theta = atan2(dy, dx);
+            %     theta = [theta; theta(end)];  % Extend theta to match the size of X or Y
+            %     % disp(['Calculated theta: ', num2str(theta')]);
+            %     theta = unwrap(theta);  % Ensure no sudden jumps
+            % end
 
             % initialize matrices
             num_steps = length(t);
 
             % continuous-time
-            Ac = zeros(3, 3, num_steps); % Preallocate a 3D array for A matrices
+            % Ac = zeros(3, 3, num_steps); % Preallocate a 3D array for A matrices
+            % 
+            % % Calculate A matrix for each time step
+            % for k = 1:num_steps
+            %     Ac(:, :, k) = [0, 0, cos(theta(k));
+            %         0, 0, sin(theta(k));
+            %         0, 0, 0];
+            % end
+            % 
+            % Bc = [0; 0; 1];
+            % Cc = eye(3);
+            % Dc = 0;
 
-            % Calculate A matrix for each time step
-            for k = 1:num_steps
-                Ac(:, :, k) = [0, 0, cos(theta(k));
-                    0, 0, sin(theta(k));
-                    0, 0, 0];
-            end
-
-            Bc = [0; 0; 1];
-            Cc = eye(3);
+            Ac = [0, 1; 0, 0];  
+            Bc = [0; 1];        
+            Cc = eye(2);       
             Dc = 0;
 
             % discrete-time
-            Ad = zeros(3, 3, num_steps);
-            Bd = zeros(3, 1, num_steps);
-            for k = 1:num_steps
-                Ad(:, :, k) = [1, 0, obj.dt * cos(theta(k));
-                    0, 1, obj.dt * sin(theta(k));
-                    0, 0, 1];
-                Bd(:, :, k) = [0.5 * obj.dt^2 * cos(theta(k));
-                    0.5 * obj.dt^2 * sin(theta(k));
-                    obj.dt];
-            end
-            Cd = Cc;
-            Dd = Dc;
+            % Ad = zeros(3, 3, num_steps);
+            % Bd = zeros(3, 1, num_steps);
+            % for k = 1:num_steps
+            %     Ad(:, :, k) = [1, 0, obj.dt * cos(theta(k));
+            %         0, 1, obj.dt * sin(theta(k));
+            %         0, 0, 1];
+            %     Bd(:, :, k) = [0.5 * obj.dt^2 * cos(theta(k));
+            %         0.5 * obj.dt^2 * sin(theta(k));
+            %         obj.dt];
+            % end
+            % Cd = Cc;
+            % Dd = Dc;
+            Ad_c = [1, obj.dt;
+                    0, 1   ];   % 2×2
+            Bd_c = [0.5*obj.dt^2;
+                    obj.dt    ]; % 2×1
+            Ad = repmat(Ad_c,1,1,num_steps);
+            Bd = repmat(Bd_c,1,1,num_steps);
+            Cd = Cc;   % eye(2)
+            Dd = 0;
 
             % Initilize control input and intial values and noise variable
             u = Acc;
-            x = zeros(3, length(t) + 1);
-            z = zeros(3, length(t));
+            % x = zeros(3, length(t) + 1);
+            % z = zeros(3, length(t));
+            % 
+            % % initial value
+            % x(:,1) = [X(1); Y(1); Vel(1)];
+            x = zeros(2, length(t)+1);
+            z = zeros(2, length(t));
+            x(:,1) = [X(1); Vel(1)]; % Y removed from state
 
-            % initial value
-            x(:,1) = [X(1); Y(1); Vel(1)];
-
-            % scaling
-            scaling_X = 1.0;
-            scaling_Y = 1.2;
-            scaling_V = 0.8;
-
-            % value for noise
-            Bw = Bd; % noise is the input noise
-
-            Sw = obj.variance_Ac; % continuous noise [acc]
-            Sv = diag([obj.variance_X * scaling_X, obj.variance_Y * scaling_Y, obj.variance_V * scaling_V]); % continuous noise [x, y, vel]
-
-            SigmaW = zeros(3, 3, num_steps); % discrete noise
-            epsilon = 1e-6; % Small positive value
-
-            for k = 1:num_steps
-                Z = [-Ac(:, :, k) Bw(:, :, k)*Sw*Bw(:, :, k)'
-                    zeros(3) Ac(:, :, k)'];
-                C = expm(Z * obj.dt);
-                c12 = C(1:3, 4:6);
-                c22 = C(4:6, 4:6);
-                SigmaW(:, :, k) = c22' * c12 + epsilon * eye(3);
-            end
-
-            SigmaV = Sv/obj.dt;
+            % % scaling
+            % scaling_X = 1.0;
+            % scaling_Y = 1.2;
+            % scaling_V = 0.8;
+            % 
+            % % value for noise
+            % Bw = Bd; % noise is the input noise
+            % 
+            % Sw = obj.variance_Ac; % continuous noise [acc]
+            % Sv = diag([obj.variance_X * scaling_X, obj.variance_Y * scaling_Y, obj.variance_V * scaling_V]); % continuous noise [x, y, vel]
+            % 
+            % SigmaW = zeros(3, 3, num_steps); % discrete noise
+            % epsilon = 1e-6; % Small positive value
+            % 
+            % for k = 1:num_steps
+            %     Z = [-Ac(:, :, k) Bw(:, :, k)*Sw*Bw(:, :, k)'
+            %         zeros(3) Ac(:, :, k)'];
+            %     C = expm(Z * obj.dt);
+            %     c12 = C(1:3, 4:6);
+            %     c22 = C(4:6, 4:6);
+            %     SigmaW(:, :, k) = c22' * c12 + epsilon * eye(3);
+            % end
+            % 
+            % SigmaV = Sv/obj.dt;
+            Sw = obj.variance_Ac;
+            Sv = diag([obj.variance_X,
+                       obj.variance_V]);
+            
+            % Closed-form SigmaW for CA model
+            SigmaW_c = Bd_c * Sw * Bd_c';
+            SigmaW = repmat(SigmaW_c,1,1,num_steps);
+            
+            % Bug 4 fix: Sv is already discrete variance
+            % — do NOT divide by dt
+            SigmaV = Sv;
 
             % Model
 
@@ -497,9 +524,13 @@ classdef Car < handle
             end
 
             % After the loop, handle the last state update and output calculation
-            x(:, end) = Ad(:,:,end) * x(:, end-1) + Bd(:, :, end) * u(end); % Last state update
-            x = x(:, 1:length(t));
-            z(:, end) = Cd * x(:, end) + Dd * u(end); % Last output
+            % x(:, end) = Ad(:,:,end) * x(:, end-1) + Bd(:, :, end) * u(end); % Last state update
+            % x = x(:, 1:length(t));
+            % z(:, end) = Cd * x(:, end) + Dd * u(end); % Last output
+            x(:,end) = Ad(:,:,end)*x(:,end-1) + Bd(:,:,end)*u(end);
+            x = x(:,1:length(t));
+            z(:,end) = Cd*x(:,end);
+            % Dd*u removed (Dd=0, and u not in z)
 
 
             % Save short-term data
@@ -513,11 +544,17 @@ classdef Car < handle
             % Save long-term data
 
             % Ensure correct initialization for model fields
+            % if ~isfield(obj.model_v2v, vehicleID)
+            %     obj.model_v2v.(vehicleID) = struct(...
+            %         't', [], 'Ad', zeros(3, 3, 0), 'Bd', zeros(3, 1, 0), ...
+            %         'Cd', Cd, 'Dd', Dd, 'SigmaW', zeros(3, 3, 0), ...
+            %         'SigmaV', SigmaV, 'u', zeros(0, 1), 'x', zeros(3, 0), 'z', zeros(3, 0));
+            % end
             if ~isfield(obj.model_v2v, vehicleID)
                 obj.model_v2v.(vehicleID) = struct(...
-                    't', [], 'Ad', zeros(3, 3, 0), 'Bd', zeros(3, 1, 0), ...
-                    'Cd', Cd, 'Dd', Dd, 'SigmaW', zeros(3, 3, 0), ...
-                    'SigmaV', SigmaV, 'u', zeros(0, 1), 'x', zeros(3, 0), 'z', zeros(3, 0));
+                    't', [], 'Ad', zeros(2, 2, 0), 'Bd', zeros(2, 1, 0), ...
+                    'Cd', Cd, 'Dd', Dd, 'SigmaW', zeros(2, 2, 0), ...
+                    'SigmaV', SigmaV, 'u', zeros(0, 1), 'x', zeros(2, 0), 'z', zeros(2, 0));
             end
 
             % Append data to long-term model with consistency checks
