@@ -518,9 +518,11 @@ classdef Car < handle
             % Model
 
             for k = 1:length(t)-1 % Loop until the second-to-last element
-                x(:,k+1) = Ad(:,:,k) * x(:,k) + Bd(:, :, k) * u(k+1) + chol(SigmaW(:, :, k), 'lower') * randn(3, 1); % Use u(k+1) correctly
+                % x(:,k+1) = Ad(:,:,k) * x(:,k) + Bd(:, :, k) * u(k+1) + chol(SigmaW(:, :, k), 'lower') * randn(3, 1); % Use u(k+1) correctly
+                x(:,k+1) = Ad(:,:,k) * x(:,k) + Bd(:, :, k) * u(k+1) + chol(SigmaW(:, :, k), 'lower') * randn(2, 1); % Use u(k+1) correctly
                 % z(:,k) = Cd * x(:,k) + Dd * u(k) + chol(SigmaV, 'lower') * randn(3, 1); % Still use u(k) for the current state
-                z(:,k) = Cd * x(:,k) + Dd * u(k)
+                % z(:,k) = Cd * x(:,k) + Dd * u(k)
+                z(:,k) = Cd * x(:,k)
             end
 
             % After the loop, handle the last state update and output calculation
@@ -607,7 +609,9 @@ classdef Car < handle
             [nx ,nt] = size (x);
             [nz, nt_] = size (z);
             % Initialize state estimate and covariance
-            xhat = x(:, 1); SigmaX = zeros(nx ,nx);
+            xhat = x(:, 1); 
+            % SigmaX = zeros(nx ,nx);
+            SigmaX = diag([obj.variance_X, obj.variance_V]);
             % Initialize storage for state / bounds for plotting purposes
             xhatstore = zeros(nx ,nt);
             xhatstore(:, 1) = xhat;
@@ -626,12 +630,16 @@ classdef Car < handle
                 L = SigmaX * Cd' /( Cd* SigmaX *Cd'+ SigmaV);
                 % KF Step 2b: State estimate measurement update
                 % xhat = xhat + L*(z(:,k) - zhat);
+                % z_meas = [obj.str_v2v_data_short.(vehicleID).X'; ...
+                %           obj.str_v2v_data_short.(vehicleID).Y'; ...   % ← add this line back
+                %           obj.str_v2v_data_short.(vehicleID).V'];
                 z_meas = [obj.str_v2v_data_short.(vehicleID).X'; ...
-                          obj.str_v2v_data_short.(vehicleID).Y'; ...   % ← add this line back
                           obj.str_v2v_data_short.(vehicleID).V'];
                 xhat = xhat + L * (z_meas(:,k) - zhat);
                 % KF Step 2c: Estimation - error covariance measurement update
-                SigmaX = (eye(nx)-L*Cd)* SigmaX;
+                % SigmaX = (eye(nx)-L*Cd)* SigmaX;
+                ILC = eye(nx) - L * Cd;
+                SigmaX = ILC * SigmaX * ILC' + L * SigmaV * L';
                 % [ Store estimate and bounds for evaluation / plotting purposes ]
                 xhatstore(:,k) = xhat;
                 zhatstore(:,k) = zhat;
@@ -676,38 +684,41 @@ classdef Car < handle
 
             % Parameters
             threshold = 0.70;                % Threshold for trustworthiness
-            wx = 1/3; wy = 1/3; wv = 1/3;    % Weights for X, Y, and V
+            % wx = 1/3; wy = 1/3; wv = 1/3;    % Weights for X, Y, and V
+            wx = 1/2; wv = 1/2; 
 
             % extract data
             X = dataV2V.X';
-            Y = dataV2V.Y';
+            % Y = dataV2V.Y';
             V = dataV2V.V';
             zhat = dataKF.zhatstore;
 
             % Compute error
             error_x = abs(X - zhat(1, :));
-            error_y = abs(Y - zhat(2, :));
-            error_v = abs(V - zhat(3, :));
+            % error_y = abs(Y - zhat(2, :));
+            % error_v = abs(V - zhat(3, :));
+            error_v = abs(V - zhat(2, :));
 
             % Calculate dynamic error sensitivity based on the range or standard deviation
             buffer = 1e-5;
             sensitivity_x = 3 * sqrt(obj.variance_X);
-            sensitivity_y = 3 * sqrt(obj.variance_Y);
+            % sensitivity_y = 3 * sqrt(obj.variance_Y);
             sensitivity_v = 3 * sqrt(obj.variance_V);
 
             % Avoid division by zero by adding a small buffer
             normalized_error_x = error_x / (sensitivity_x + buffer);
-            normalized_error_y = error_y / (sensitivity_y + buffer);
+            % normalized_error_y = error_y / (sensitivity_y + buffer);
             normalized_error_v = error_v / (sensitivity_v + buffer);
 
             % Use exponential decay: error=0→1.0, error=∞→0.0
             cred_x = exp(-normalized_error_x);
-            cred_y = exp(-normalized_error_y);
+            % cred_y = exp(-normalized_error_y);
             cred_v = exp(-normalized_error_v);
 
 
             % Weighted credibility score
-            cred = wx * cred_x + wy * cred_y + wv * cred_v;
+            % cred = wx * cred_x + wy * cred_y + wv * cred_v;
+            cred = wx * cred_x + wv * cred_v;
 
 
             % Compute mean credibility score and trustworthiness

@@ -111,19 +111,21 @@ end
 % Extract time and data
 t = selected_L1_car.t;
 x_noisy = target_car_v2v.X; % Noisy X
-y_noisy = target_car_v2v.Y; % Noisy Y
+% y_noisy = target_car_v2v.Y; % Noisy Y
 v_noisy = target_car_v2v.V; % Noisy V
 
 x_model = target_car_model.z(1,:); % Model X
-y_model = target_car_model.z(2,:); % Model Y
-v_model = target_car_model.z(3,:); % Model V
+% y_model = target_car_model.z(2,:); % Model Y
+% v_model = target_car_model.z(3,:); % Model V
+v_model = target_car_model.z(2,:); % Model V
 
 x_KF = target_car_KF.zhatstore(1,:); % Kalman Filter X
-y_KF = target_car_KF.zhatstore(2,:); % Kalman Filter Y
-v_KF = target_car_KF.zhatstore(3,:); % Kalman Filter V
+% y_KF = target_car_KF.zhatstore(2,:); % Kalman Filter Y
+% v_KF = target_car_KF.zhatstore(3,:); % Kalman Filter V
+v_KF = target_car_KF.zhatstore(2,:); % Kalman Filter V
 
 x_real = selected_L1_car.str_X; % Real X
-y_real = selected_L1_car.str_Y; % Real Y
+% y_real = selected_L1_car.str_Y; % Real Y
 v_real = selected_L1_car.str_V; % Real V
 
 credibility_t = selected_LR_car.str_cred.(target_car_id).t;  % Time for credibility score
@@ -134,7 +136,8 @@ trustworthiness = selected_LR_car.str_cred.(target_car_id).trustworthy;
 % subplot(3, 3, 2);
 % hold on;
 
-subplot(3, 2, 1); 
+% subplot(3, 2, 1); 
+subplot(2, 2, 1);
 hold on;
 
 plot(t, x_noisy, color_noisy, 'LineWidth', line_width);
@@ -150,22 +153,23 @@ legend({'Noisy', 'Model', 'KF', 'Real'}, 'FontSize', font_size, 'Location', 'bes
 % subplot(3, 3, 5);
 % hold on;
 
-subplot(3, 2, 3);
-hold on;
-
-plot(t, y_noisy, color_noisy, 'LineWidth', line_width);
-plot(t, y_model, color_model, 'LineWidth', line_width);
-plot(t, y_KF, color_KF, 'LineWidth', line_width);
-plot(t, y_real, color_real, 'LineWidth', line_width);
-ylabel('Y (m)', 'FontSize', font_size);
-title('Y Position vs. Time of v10000', 'FontSize', font_size);
-grid on;
+% subplot(3, 2, 3);
+% hold on;
+% 
+% plot(t, y_noisy, color_noisy, 'LineWidth', line_width);
+% plot(t, y_model, color_model, 'LineWidth', line_width);
+% plot(t, y_KF, color_KF, 'LineWidth', line_width);
+% plot(t, y_real, color_real, 'LineWidth', line_width);
+% ylabel('Y (m)', 'FontSize', font_size);
+% title('Y Position vs. Time of v10000', 'FontSize', font_size);
+% grid on;
 
 % **Third Row: V vs. Time**
 % subplot(3, 3, 8);
 % hold on;
 
-subplot(3, 2, 5);
+% subplot(3, 2, 5);
+subplot(2, 2, 3);
 hold on;
 
 plot(t, v_noisy, color_noisy, 'LineWidth', line_width);
@@ -182,7 +186,8 @@ grid on;
 % subplot(2, 3, 3);
 % hold on;
 
-subplot(3, 2, 2);
+% subplot(3, 2, 2);
+subplot(2, 2, 2);
 hold on;
 
 % Color
@@ -221,7 +226,8 @@ set(leg, 'Units', 'normalized', 'Position', [0.83, 0.62, 0.12, 0.3]); % Adjust p
 % subplot(2, 3, 6);
 % hold on;
 
-subplot(3, 2, 6);
+% subplot(3, 2, 6);
+subplot(2, 2, 4);
 hold on;
 
 % Plot trustworthiness of all L1 cars (OgLnID == 2)
@@ -388,7 +394,8 @@ scenario_labels = {'(a) Constant Noise', '(b) No Noise', '(c) Real Noise'};
 comparison_labels = {'Case (I)', 'Case (II)', 'Case (III)', 'Case (IV)'};
 
 % Initialize array to store NRMSE results for each scenario
-NRMSE_results = zeros(4, 3, 3); % [4 comparisons] x [3 scenarios] x [X, Y, V]
+% NRMSE_results = zeros(4, 3, 3); % [4 comparisons] x [3 scenarios] x [X, Y, V]
+NRMSE_results = zeros(4, 3, 2);
 
 % Function to compute NRMSE
 function nrmse_value = compute_nrmse(y_true, y_pred)
@@ -417,7 +424,8 @@ for i = 1:3
     num_vehicles = length(vehicle_names);
 
     % Initialize NRMSE storage for this scenario
-    scenario_NRMSE = zeros(num_vehicles, 4, 3); % [vehicles] x [4 comparisons] x [X, Y, V]
+    % scenario_NRMSE = zeros(num_vehicles, 4, 3); % [vehicles] x [4 comparisons] x [X, Y, V]
+    scenario_NRMSE = zeros(num_vehicles, 4, 2);
 
     % Loop through all vehicles
     for j = 1:num_vehicles
@@ -430,27 +438,35 @@ for i = 1:3
 
             % Extract data
             x_noisy = selected_LR_car.str_v2v_data.(vehicle_id).X;
-            y_noisy = selected_LR_car.str_v2v_data.(vehicle_id).Y;
+            % y_noisy = selected_LR_car.str_v2v_data.(vehicle_id).Y;
             v_noisy = selected_LR_car.str_v2v_data.(vehicle_id).V;
 
             x_model = selected_LR_car.model_v2v.(vehicle_id).z(1,:);
-            y_model = selected_LR_car.model_v2v.(vehicle_id).z(2,:);
-            v_model = selected_LR_car.model_v2v.(vehicle_id).z(3,:);
+            % y_model = selected_LR_car.model_v2v.(vehicle_id).z(2,:);
+            % v_model = selected_LR_car.model_v2v.(vehicle_id).z(3,:);
+            v_model = selected_LR_car.model_v2v.(vehicle_id).z(2,:);
 
             x_KF = selected_LR_car.KF_v2v.(vehicle_id).zhatstore(1,:);
-            y_KF = selected_LR_car.KF_v2v.(vehicle_id).zhatstore(2,:);
-            v_KF = selected_LR_car.KF_v2v.(vehicle_id).zhatstore(3,:);
+            % y_KF = selected_LR_car.KF_v2v.(vehicle_id).zhatstore(2,:);
+            % v_KF = selected_LR_car.KF_v2v.(vehicle_id).zhatstore(3,:);
+            v_KF = selected_LR_car.KF_v2v.(vehicle_id).zhatstore(2,:);
 
             x_real = selected_L1_car.str_X;
-            y_real = selected_L1_car.str_Y;
+            % y_real = selected_L1_car.str_Y;
             v_real = selected_L1_car.str_V;
 
             % Compute NRMSE for each category (X, Y, V separately)
+            % scenario_NRMSE(j, :, :) = [
+            %     compute_nrmse(x_real, x_model), compute_nrmse(y_real, y_model), compute_nrmse(v_real, v_model);  % Model vs Real
+            %     compute_nrmse(x_real, x_KF), compute_nrmse(y_real, y_KF), compute_nrmse(v_real, v_KF);           % Kalman vs Real
+            %     compute_nrmse(x_real, x_noisy), compute_nrmse(y_real, y_noisy), compute_nrmse(v_real, v_noisy);  % Real vs Noisy
+            %     compute_nrmse(x_KF, x_noisy), compute_nrmse(y_KF, y_noisy), compute_nrmse(v_KF, v_noisy)         % Kalman vs Noisy
+            %     ];
             scenario_NRMSE(j, :, :) = [
-                compute_nrmse(x_real, x_model), compute_nrmse(y_real, y_model), compute_nrmse(v_real, v_model);  % Model vs Real
-                compute_nrmse(x_real, x_KF), compute_nrmse(y_real, y_KF), compute_nrmse(v_real, v_KF);           % Kalman vs Real
-                compute_nrmse(x_real, x_noisy), compute_nrmse(y_real, y_noisy), compute_nrmse(v_real, v_noisy);  % Real vs Noisy
-                compute_nrmse(x_KF, x_noisy), compute_nrmse(y_KF, y_noisy), compute_nrmse(v_KF, v_noisy)         % Kalman vs Noisy
+                compute_nrmse(x_real, x_model), compute_nrmse(v_real, v_model);  % Model vs Real
+                compute_nrmse(x_real, x_KF), compute_nrmse(v_real, v_KF);           % Kalman vs Real
+                compute_nrmse(x_real, x_noisy), compute_nrmse(v_real, v_noisy);  % Real vs Noisy
+                compute_nrmse(x_KF, x_noisy), compute_nrmse(v_KF, v_noisy)         % Kalman vs Noisy
                 ];
         end
     end
@@ -461,7 +477,7 @@ end
 
 % Define colors for X, Y, V
 colors = [0.2 0.4 0.8;  % Blue for X
-          1.0 0.5 0.0;  % Orange for Y
+          % 1.0 0.5 0.0;  % Orange for Y
           0.8 0.1 0.1]; % Red for Velocity
 
 % Create figure with 4 subplots (1 row, 4 columns)
@@ -479,7 +495,10 @@ for i = 1:3  % 3 scenarios (Constant Noise, No Noise, Real Noise)
 
     % Create grouped bars for X, Y, V
     b = bar(bar_data, 'grouped', 'BarWidth', bar_width);
-    for k = 1:3
+    % for k = 1:3
+    %     b(k).FaceColor = colors(k, :);
+    % end
+    for k = 1:2
         b(k).FaceColor = colors(k, :);
     end
 
@@ -492,7 +511,8 @@ for i = 1:3  % 3 scenarios (Constant Noise, No Noise, Real Noise)
     set(gca, 'FontSize', 11);
 
     title(scenario_labels{i}, 'FontSize', 12, 'FontWeight', 'bold');
-    legend({'X', 'Y', 'Velocity'}, 'Location', 'best', 'FontSize', 14);
+    % legend({'X', 'Y', 'Velocity'}, 'Location', 'best', 'FontSize', 14);
+    legend({'X', 'Velocity'}, 'Location', 'best', 'FontSize', 14);
     grid on;
     ylim([0 max(NRMSE_results(:)) * 1.1]); % Adjust y-limit
 
