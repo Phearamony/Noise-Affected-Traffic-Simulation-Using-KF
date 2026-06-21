@@ -29,20 +29,20 @@ classdef Car < handle
         t = [];
         dt = 0.5;
         str_X = [];
-        str_Y = [];
+        % str_Y = [];
         str_V = [];
         str_Ac = [];
 
         % Noise
         noisy_X = 0;
-        noisy_Y = 0;
+        % noisy_Y = 0;
         noisy_V = 0;
         noisy_Ac = 0;
 
         % Noise variance
         variance_X = 14.27141916;
-        variance_Y = 21.61521545;
-        variance_V = 0.01;
+        % variance_Y = 21.61521545;
+        variance_V = 1.0; %0.01
         variance_Ac = 0.01;
         % variance_X = 1e-6;
         % variance_Y = 1e-6;
@@ -66,8 +66,11 @@ classdef Car < handle
 
         % KF
         KF_v2v = struct();
-
         KF_v2v_short = struct();
+
+        % Gated KF
+        KF_gated_v2v = struct();        % chi2-gated KF results
+        KF_gated_v2v_short = struct();  % short-term gated results
 
         % Cred
         cred = struct();
@@ -81,7 +84,7 @@ classdef Car < handle
             obj.LnID = Ln;
             obj.OgLnID = Ln; % Set the original lane ID
             obj.Clr = Ln + 1;
-            obj.Y = Ln;
+            % obj.Y = Ln;
             obj.Th = 1.2 + 1.2 * rand;
             % obj.Vd = 21 + 6 * rand + 2 - 4 * Ln;
             obj.Vd = 21 + 6 * rand + 2;
@@ -91,7 +94,7 @@ classdef Car < handle
 
             % Store the initial values in str_* for the true data
             obj.str_X = obj.X;
-            obj.str_Y = obj.Y;
+            % obj.str_Y = obj.Y;
             obj.str_V = obj.V;
             obj.str_Ac = obj.Ac;
             obj.t = 0;
@@ -159,7 +162,7 @@ classdef Car < handle
         % Store normal data
         function storeNormalState(obj)
             obj.str_X = [obj.str_X; obj.X];            % Store original X
-            obj.str_Y = [obj.str_Y; obj.Y];            % Store original Y
+            % obj.str_Y = [obj.str_Y; obj.Y];            % Store original Y
             obj.str_V = [obj.str_V; obj.V];            % Store original V
             obj.str_Ac = [obj.str_Ac; obj.Ac];          % Store original Ac
             obj.t = [obj.t; obj.t(end) + obj.dt];           % Store simulation time
@@ -175,12 +178,13 @@ classdef Car < handle
             if isfield(obj.str_v2v_data_short, fieldName)
                 obj.str_v2v_data_short.(fieldName).t = 0;
                 obj.str_v2v_data_short.(fieldName).X = obj.getLastElement(obj.str_v2v_data_short.(fieldName).X);
-                obj.str_v2v_data_short.(fieldName).Y = obj.getLastElement(obj.str_v2v_data_short.(fieldName).Y);
+                % obj.str_v2v_data_short.(fieldName).Y = obj.getLastElement(obj.str_v2v_data_short.(fieldName).Y);
                 obj.str_v2v_data_short.(fieldName).V = obj.getLastElement(obj.str_v2v_data_short.(fieldName).V);
                 obj.str_v2v_data_short.(fieldName).Ac = obj.getLastElement(obj.str_v2v_data_short.(fieldName).Ac);
             else
                 % Initialize if missing
-                obj.str_v2v_data_short.(fieldName) = struct('t', 0, 'X', 0, 'Y', 0, 'V', 0, 'Ac', 0);
+                % obj.str_v2v_data_short.(fieldName) = struct('t', 0, 'X', 0, 'Y', 0, 'V', 0, 'Ac', 0);
+                obj.str_v2v_data_short.(fieldName) = struct('t', 0, 'X', 0, 'V', 0, 'Ac', 0);
             end
 
             % Reset short-term model data
@@ -301,7 +305,7 @@ classdef Car < handle
 
             % Apply Gaussian noise with mode-dependent variance
             obj.noisy_X = obj.X + noise_factor * sqrt(obj.variance_X) * randn(1, 1);
-            obj.noisy_Y = obj.Y + noise_factor * sqrt(obj.variance_Y) * randn(1, 1);
+            % obj.noisy_Y = obj.Y + noise_factor * sqrt(obj.variance_Y) * randn(1, 1);
             obj.noisy_V = obj.V + noise_factor * sqrt(obj.variance_V) * randn(1, 1);
             obj.noisy_Ac = obj.Ac + noise_factor * sqrt(obj.variance_Ac) * randn(1, 1);
         end
@@ -318,7 +322,7 @@ classdef Car < handle
 
             % Update single-value V2V data
             obj.v2v_data.(fieldName).X = trackedVehicle.noisy_X;
-            obj.v2v_data.(fieldName).Y = trackedVehicle.noisy_Y;
+            % obj.v2v_data.(fieldName).Y = trackedVehicle.noisy_Y;
             obj.v2v_data.(fieldName).V = trackedVehicle.noisy_V;
             obj.v2v_data.(fieldName).Ac = trackedVehicle.noisy_Ac;
         end
@@ -330,10 +334,16 @@ classdef Car < handle
 
             % Create historical data struct if it doesn't exist, initialize
             % it
+            % if ~isfield(obj.str_v2v_data, fieldName)
+            %     obj.str_v2v_data.(fieldName) = struct('t', trackedVehicle.t(1), ...
+            %         'X', trackedVehicle.str_X(1), ...
+            %         'Y', trackedVehicle.str_Y(1), ...
+            %         'V', trackedVehicle.str_V(1), ...
+            %         'Ac', trackedVehicle.str_Ac(1));
+            % end
             if ~isfield(obj.str_v2v_data, fieldName)
                 obj.str_v2v_data.(fieldName) = struct('t', trackedVehicle.t(1), ...
                     'X', trackedVehicle.str_X(1), ...
-                    'Y', trackedVehicle.str_Y(1), ...
                     'V', trackedVehicle.str_V(1), ...
                     'Ac', trackedVehicle.str_Ac(1));
             end
@@ -341,16 +351,22 @@ classdef Car < handle
             % Append to historical data
             obj.str_v2v_data.(fieldName).t = [obj.str_v2v_data.(fieldName).t; obj.t(end) + obj.dt];
             obj.str_v2v_data.(fieldName).X = [obj.str_v2v_data.(fieldName).X; trackedVehicle.noisy_X];
-            obj.str_v2v_data.(fieldName).Y = [obj.str_v2v_data.(fieldName).Y; trackedVehicle.noisy_Y];
+            % obj.str_v2v_data.(fieldName).Y = [obj.str_v2v_data.(fieldName).Y; trackedVehicle.noisy_Y];
             obj.str_v2v_data.(fieldName).V = [obj.str_v2v_data.(fieldName).V; trackedVehicle.noisy_V];
             obj.str_v2v_data.(fieldName).Ac = [obj.str_v2v_data.(fieldName).Ac; trackedVehicle.noisy_Ac];
 
 
             % Short term
+            % if ~isfield(obj.str_v2v_data_short, fieldName)
+            %     obj.str_v2v_data_short.(fieldName) = struct('t', trackedVehicle.t(1), ...
+            %         'X', trackedVehicle.str_X(1), ...
+            %         'Y', trackedVehicle.str_Y(1), ...
+            %         'V', trackedVehicle.str_V(1), ...
+            %         'Ac', trackedVehicle.str_Ac(1));
+            % end
             if ~isfield(obj.str_v2v_data_short, fieldName)
                 obj.str_v2v_data_short.(fieldName) = struct('t', trackedVehicle.t(1), ...
                     'X', trackedVehicle.str_X(1), ...
-                    'Y', trackedVehicle.str_Y(1), ...
                     'V', trackedVehicle.str_V(1), ...
                     'Ac', trackedVehicle.str_Ac(1));
             end
@@ -358,7 +374,7 @@ classdef Car < handle
             % Append to historical data
             obj.str_v2v_data_short.(fieldName).t = [obj.str_v2v_data_short.(fieldName).t; obj.str_v2v_data_short.(fieldName).t(end) + obj.dt];
             obj.str_v2v_data_short.(fieldName).X = [obj.str_v2v_data_short.(fieldName).X; trackedVehicle.noisy_X];
-            obj.str_v2v_data_short.(fieldName).Y = [obj.str_v2v_data_short.(fieldName).Y; trackedVehicle.noisy_Y];
+            % obj.str_v2v_data_short.(fieldName).Y = [obj.str_v2v_data_short.(fieldName).Y; trackedVehicle.noisy_Y];
             obj.str_v2v_data_short.(fieldName).V = [obj.str_v2v_data_short.(fieldName).V; trackedVehicle.noisy_V];
             obj.str_v2v_data_short.(fieldName).Ac = [obj.str_v2v_data_short.(fieldName).Ac; trackedVehicle.noisy_Ac];
         end
@@ -378,7 +394,7 @@ classdef Car < handle
 
             % extract dataz
             X_noisy = data.X;
-            Y_noisy = data.Y;
+            % Y_noisy = data.Y;
             Vel_noisy = data.V;
             Acc_noisy = data.Ac;
             t = data.t;
@@ -392,7 +408,7 @@ classdef Car < handle
                 % Skip filtering if data is too short
                 % disp("Skipping filtering: insufficient data.");
                 X = X_noisy;
-                Y = Y_noisy;
+                % Y = Y_noisy;
                 Vel = Vel_noisy;
                 Acc = Acc_noisy;
             else
@@ -405,7 +421,7 @@ classdef Car < handle
 
                 % Apply Savitzky-Golay filtering
                 X = sgolayfilt(X_noisy, polynomial_order, window_length);
-                Y = sgolayfilt(Y_noisy, polynomial_order, window_length);
+                % Y = sgolayfilt(Y_noisy, polynomial_order, window_length);
                 Vel = sgolayfilt(Vel_noisy, polynomial_order, window_length);
                 Acc = sgolayfilt(Acc_noisy, polynomial_order, window_length);
             end
@@ -429,21 +445,21 @@ classdef Car < handle
 
             % continuous-time
             % Ac = zeros(3, 3, num_steps); % Preallocate a 3D array for A matrices
-            % 
+            %
             % % Calculate A matrix for each time step
             % for k = 1:num_steps
             %     Ac(:, :, k) = [0, 0, cos(theta(k));
             %         0, 0, sin(theta(k));
             %         0, 0, 0];
             % end
-            % 
+            %
             % Bc = [0; 0; 1];
             % Cc = eye(3);
             % Dc = 0;
 
-            Ac = [0, 1; 0, 0];  
-            Bc = [0; 1];        
-            Cc = eye(2);       
+            Ac = [0, 1; 0, 0];
+            Bc = [0; 1];
+            Cc = eye(2);
             Dc = 0;
 
             % discrete-time
@@ -460,9 +476,9 @@ classdef Car < handle
             % Cd = Cc;
             % Dd = Dc;
             Ad_c = [1, obj.dt;
-                    0, 1   ];   % 2×2
+                0, 1   ];   % 2×2
             Bd_c = [0.5*obj.dt^2;
-                    obj.dt    ]; % 2×1
+                obj.dt    ]; % 2×1
             Ad = repmat(Ad_c,1,1,num_steps);
             Bd = repmat(Bd_c,1,1,num_steps);
             Cd = Cc;   % eye(2)
@@ -472,7 +488,7 @@ classdef Car < handle
             u = Acc;
             % x = zeros(3, length(t) + 1);
             % z = zeros(3, length(t));
-            % 
+            %
             % % initial value
             % x(:,1) = [X(1); Y(1); Vel(1)];
             x = zeros(2, length(t)+1);
@@ -483,16 +499,16 @@ classdef Car < handle
             % scaling_X = 1.0;
             % scaling_Y = 1.2;
             % scaling_V = 0.8;
-            % 
+            %
             % % value for noise
             % Bw = Bd; % noise is the input noise
-            % 
+            %
             % Sw = obj.variance_Ac; % continuous noise [acc]
             % Sv = diag([obj.variance_X * scaling_X, obj.variance_Y * scaling_Y, obj.variance_V * scaling_V]); % continuous noise [x, y, vel]
-            % 
+            %
             % SigmaW = zeros(3, 3, num_steps); % discrete noise
             % epsilon = 1e-6; % Small positive value
-            % 
+            %
             % for k = 1:num_steps
             %     Z = [-Ac(:, :, k) Bw(:, :, k)*Sw*Bw(:, :, k)'
             %         zeros(3) Ac(:, :, k)'];
@@ -501,16 +517,17 @@ classdef Car < handle
             %     c22 = C(4:6, 4:6);
             %     SigmaW(:, :, k) = c22' * c12 + epsilon * eye(3);
             % end
-            % 
+            %
             % SigmaV = Sv/obj.dt;
             Sw = obj.variance_Ac;
             Sv = diag([obj.variance_X,
-                       obj.variance_V]);
-            
+                obj.variance_V]);
+
             % Closed-form SigmaW for CA model
-            SigmaW_c = Bd_c * Sw * Bd_c';
+            % SigmaW_c = Bd_c * Sw * Bd_c';
+            SigmaW_c = Bd_c * Sw * Bd_c' + 1e-6 * eye(2);
             SigmaW = repmat(SigmaW_c,1,1,num_steps);
-            
+
             % Bug 4 fix: Sv is already discrete variance
             % — do NOT divide by dt
             SigmaV = Sv;
@@ -521,8 +538,8 @@ classdef Car < handle
                 % x(:,k+1) = Ad(:,:,k) * x(:,k) + Bd(:, :, k) * u(k+1) + chol(SigmaW(:, :, k), 'lower') * randn(3, 1); % Use u(k+1) correctly
                 x(:,k+1) = Ad(:,:,k) * x(:,k) + Bd(:, :, k) * u(k+1) + chol(SigmaW(:, :, k), 'lower') * randn(2, 1); % Use u(k+1) correctly
                 % z(:,k) = Cd * x(:,k) + Dd * u(k) + chol(SigmaV, 'lower') * randn(3, 1); % Still use u(k) for the current state
-                % z(:,k) = Cd * x(:,k) + Dd * u(k)
-                z(:,k) = Cd * x(:,k)
+                % z(:,k) = Cd * x(:,k) + Dd * u(k);
+                z(:,k) = Cd * x(:,k);
             end
 
             % After the loop, handle the last state update and output calculation
@@ -609,7 +626,7 @@ classdef Car < handle
             [nx ,nt] = size (x);
             [nz, nt_] = size (z);
             % Initialize state estimate and covariance
-            xhat = x(:, 1); 
+            xhat = x(:, 1);
             % SigmaX = zeros(nx ,nx);
             SigmaX = diag([obj.variance_X, obj.variance_V]);
             % Initialize storage for state / bounds for plotting purposes
@@ -634,7 +651,7 @@ classdef Car < handle
                 %           obj.str_v2v_data_short.(vehicleID).Y'; ...   % ← add this line back
                 %           obj.str_v2v_data_short.(vehicleID).V'];
                 z_meas = [obj.str_v2v_data_short.(vehicleID).X'; ...
-                          obj.str_v2v_data_short.(vehicleID).V'];
+                    obj.str_v2v_data_short.(vehicleID).V'];
                 xhat = xhat + L * (z_meas(:,k) - zhat);
                 % KF Step 2c: Estimation - error covariance measurement update
                 % SigmaX = (eye(nx)-L*Cd)* SigmaX;
@@ -671,6 +688,160 @@ classdef Car < handle
 
             % disp(["KF_v2v : ", mat2str(size(obj.KF_v2v.(vehicleID).xhatstore)), " vehicleID: ", vehicleID]);
         end
+           
+        %% KF_gated
+        function KF_gated(obj, trackedVehicle)
+            vehicleID = sprintf('v%d', trackedVehicle.ID);
+            data = obj.model_v2v_short.(vehicleID);
+
+            % ---- Gate parameters ----
+            alpha = 0.95;           % significance level  (1-alpha = false alarm rate)
+            %   For nz=2, chi2inv values:
+            %     alpha=0.95 → gamma=5.9915   (standard choice in literature)
+            %     alpha=0.99 → gamma=9.2103   (more conservative)
+            try
+                gate_threshold = chi2inv(alpha, 2);   % requires Statistics Toolbox
+            catch
+                gate_threshold = 5.9915;              % hardcoded fallback for nz=2, alpha=0.95
+            end
+
+            % ---- Short-term storage initialisation ----
+            if ~isfield(obj.KF_gated_v2v_short, vehicleID)
+                obj.KF_gated_v2v_short.(vehicleID) = struct( ...
+                    't', [], 'xhatstore', [], 'zhatstore', [], ...
+                    'NIS_store', [], 'anomaly_store', []);
+            end
+
+            % ---- Extract model data (identical to standard KF) ----
+            t      = data.t;
+            Ad     = data.Ad;
+            Bd     = data.Bd;
+            Cd     = data.Cd;
+            Dd     = data.Dd;
+            SigmaW = data.SigmaW;
+            SigmaV = data.SigmaV;
+            u      = data.u;
+            x      = data.x;
+            z      = data.z;
+
+            [nx, nt]  = size(x);
+            [nz, nt_] = size(z);
+
+            % ---- Initialise state estimate and covariance ----
+            xhat   = x(:, 1);
+            SigmaX = diag([obj.variance_X, obj.variance_V]); % non-zero P0 (Bug 5 fix)
+
+            % ---- Allocate storage ----
+            xhatstore    = zeros(nx, nt);
+            zhatstore    = zeros(nz, nt_);
+            NIS_store    = zeros(1,  nt);    % Normalised Innovation Squared at each step
+            anomaly_store = false(1, nt);    % true = measurement rejected by gate
+
+            xhatstore(:, 1) = xhat;
+            zhatstore(:, 1) = x(:, 1);
+
+            % ---- Build measurement matrix from actual V2V data ----
+            %   z_meas(:,k) = [noisy_X; noisy_V] received at time k
+            %   (Bug 1 fix: using real V2V packets, not re-generated noise)
+            z_meas = [obj.str_v2v_data_short.(vehicleID).X'; ...
+                obj.str_v2v_data_short.(vehicleID).V'];
+
+            % ===========================================================
+            %  MAIN FILTER LOOP
+            % ===========================================================
+            for k = 2:length(t)
+
+                %% Step 1a — State prediction (time update)
+                xhat = Ad(:,:,k-1) * xhat + Bd(:,:,k-1) * u(k-1);
+
+                %% Step 1b — Error covariance prediction
+                SigmaX = Ad(:,:,k-1) * SigmaX * Ad(:,:,k-1)' + SigmaW(:,:,k-1);
+
+                %% Step 1c — Predicted measurement
+                zhat = Cd * xhat + Dd * u(k);
+
+                %% Step 2a — Kalman gain
+                S_k = Cd * SigmaX * Cd' + SigmaV;   % innovation covariance  (nz x nz)
+                L   = SigmaX * Cd' / S_k;            % Kalman gain            (nx x nz)
+
+                %% Step 2b — Innovation vector
+                epsilon = z_meas(:, k) - zhat;       % (nz x 1)
+
+                %% -------------------------------------------------------
+                %%  CHI-SQUARED INNOVATION GATE  (Mahalanobis gating)
+                %% -------------------------------------------------------
+                %  NIS is the squared Mahalanobis distance from the received
+                %  measurement to the predicted measurement, normalised by
+                %  the combined state + measurement uncertainty (Sk).
+                %
+                %  Geometric view: NIS=gamma defines an ellipse in
+                %  measurement space. Measurements inside are accepted;
+                %  outside are flagged as anomalous.
+                %
+                %  NIS ~ chi^2(nz) under H0 (genuine measurement)
+                %  NIS >> gamma   under H1 (spoofed/faulty measurement)
+
+                NIS = epsilon' / S_k * epsilon;      % scalar  (dimensionless)
+                NIS_store(k) = NIS;
+
+                if NIS <= gate_threshold
+                    %% H0: genuine measurement — standard update
+                    anomaly_store(k) = false;
+
+                    % State update
+                    xhat = xhat + L * epsilon;
+
+                    % Covariance update (Joseph stabilised form, Bug 6 fix)
+                    ILC    = eye(nx) - L * Cd;
+                    SigmaX = ILC * SigmaX * ILC' + L * SigmaV * L';
+
+                else
+                    %% H1: anomalous measurement — prediction only
+                    %   State estimate stays at x̂k⁻ (no correction)
+                    %   Covariance stays at Pk⁻    (grows — more uncertain)
+                    %
+                    %   Note: under sustained attack, Pk grows and the gate
+                    %   widens. This is conservative — the filter accepts
+                    %   more uncertainty rather than risk bad corrections.
+                    %   Mitigated by pairing with Sage-Husa adaptive Q/R.
+                    anomaly_store(k) = true;
+                    % xhat and SigmaX unchanged (prediction-only step)
+                end
+
+                %% Store
+                xhatstore(:, k) = xhat;
+                zhatstore(:, k) = zhat;
+            end
+
+            % ---- Save short-term results ----
+            obj.KF_gated_v2v_short.(vehicleID) = struct( ...
+                't',            t, ...
+                'xhatstore',    xhatstore, ...
+                'zhatstore',    zhatstore, ...
+                'NIS_store',    NIS_store, ...
+                'anomaly_store', anomaly_store);
+
+            % ---- Save long-term results ----
+            if ~isfield(obj.KF_gated_v2v, vehicleID)
+                obj.KF_gated_v2v.(vehicleID) = struct( ...
+                    't', [], 'xhatstore', [], 'zhatstore', [], ...
+                    'NIS_store', [], 'anomaly_store', []);
+            end
+
+            if isempty(obj.KF_gated_v2v.(vehicleID).t)
+                obj.KF_gated_v2v.(vehicleID).t             = obj.t;
+                obj.KF_gated_v2v.(vehicleID).xhatstore     = xhatstore;
+                obj.KF_gated_v2v.(vehicleID).zhatstore     = zhatstore;
+                obj.KF_gated_v2v.(vehicleID).NIS_store     = NIS_store;
+                obj.KF_gated_v2v.(vehicleID).anomaly_store  = anomaly_store;
+            else
+                obj.KF_gated_v2v.(vehicleID).t             = obj.t;
+                obj.KF_gated_v2v.(vehicleID).xhatstore     = [obj.KF_gated_v2v.(vehicleID).xhatstore,    xhatstore(:, 2:end)];
+                obj.KF_gated_v2v.(vehicleID).zhatstore     = [obj.KF_gated_v2v.(vehicleID).zhatstore,    zhatstore(:, 2:end)];
+                obj.KF_gated_v2v.(vehicleID).NIS_store     = [obj.KF_gated_v2v.(vehicleID).NIS_store,    NIS_store(2:end)];
+                obj.KF_gated_v2v.(vehicleID).anomaly_store  = [obj.KF_gated_v2v.(vehicleID).anomaly_store, anomaly_store(2:end)];
+            end
+        end
 
         % credibility
         function cred_v2v(obj, trackedVehicle)
@@ -685,7 +856,7 @@ classdef Car < handle
             % Parameters
             threshold = 0.70;                % Threshold for trustworthiness
             % wx = 1/3; wy = 1/3; wv = 1/3;    % Weights for X, Y, and V
-            wx = 1/2; wv = 1/2; 
+            wx = 1/2; wv = 1/2;
 
             % extract data
             X = dataV2V.X';

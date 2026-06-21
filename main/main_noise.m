@@ -54,6 +54,13 @@ CarInPer10s=0;
 num_iterations = 0;
 total_time = 0;
 
+%% Spoofing attack parameters
+attack_vehicle_idx = 1;   % L1(1) is the compromised vehicle
+attack_t0          = 30;  % attack start time [seconds]
+attack_tend        = 70;  % attack end   time [seconds]
+attack_dX          = 50;  % spoof: car appears 50 m further ahead [m]
+attack_dV          = 5;   % spoof: car appears 5 m/s faster [m/s]
+
  %% Main
 for i=1:181 % 2sec*60/0.5 + 1= 241 % 1:2401(20.01sec or 1200.5ms)
 
@@ -132,6 +139,15 @@ for i=1:181 % 2sec*60/0.5 + 1= 241 % 1:2401(20.01sec or 1200.5ms)
     for I = 1:length(L1)
         if L1(I).OgLnID == 1
             L1(I).generateNoise(L1(I)); % Add noise to this car
+
+            % Spoof L1(attack_vehicle_idx) during attack window
+            current_t = i * dt;
+            if I == attack_vehicle_idx && ...
+               current_t >= attack_t0 && current_t <= attack_tend
+                L1(I).noisy_X = L1(I).noisy_X + attack_dX;
+                L1(I).noisy_V = L1(I).noisy_V + attack_dV;
+            end
+
         end
     end
 
@@ -150,6 +166,7 @@ for i=1:181 % 2sec*60/0.5 + 1= 241 % 1:2401(20.01sec or 1200.5ms)
 
                         LR(J).v2vmodel(LR(J), L1(I)); % modelling
                         LR(J).KF(LR(J), L1(I)); % KF
+                        LR(J).KF_gated(LR(J), L1(I)); % chi2-gated KF
                         LR(J).cred_v2v(LR(J), L1(I)); % cred
                         LR(J).reset_str(LR(J), L1(I)) % reset storage
 
@@ -176,6 +193,7 @@ for i=1:181 % 2sec*60/0.5 + 1= 241 % 1:2401(20.01sec or 1200.5ms)
 
                         L1(J).v2vmodel(L1(J), L1(I)); % modelling
                         L1(J).KF(L1(J), L1(I)); % KF
+                        L1(J).KF_gated(L1(J), L1(I)); % KF_gated
                         L1(J).cred_v2v(L1(J), L1(I)); % cred
                         L1(J).reset_str(L1(J), L1(I)) % reset storage
 
@@ -351,4 +369,10 @@ save(fullfile(output_directory, 'L1_Real_Noise1v6.mat'), 'L1');
 save(fullfile(output_directory, 'LR_Real_Noise1v6.mat'), 'LR');
 
 close(outputVideo); % Finalize and save the video file
+
+% Security analysis — chi2 gate vs standard KF under attack
+target_id = sprintf('v%d', L1(1).ID); % the compromised vehicle
+SecurityPlot(LR, L1, target_id, attack_t0, attack_tend);
+
 PlotCars
+
